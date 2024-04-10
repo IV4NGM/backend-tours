@@ -18,10 +18,6 @@ const protect = asyncHandler(async (req, res, next) => {
         res.status(401)
         throw new Error('El usuario no se encuentra en la base de datos')
       }
-      if (!user.isVerified) {
-        res.status(401)
-        throw new Error('El usuario no se encuentra verificado')
-      }
       if (user.tokenVersion !== decoded.token_version) {
         res.status(401)
         throw new Error('Acceso no autorizado')
@@ -50,4 +46,13 @@ const adminProtect = asyncHandler(async (req, res, next) => {
   }
 })
 
-module.exports = { protect, adminProtect }
+const managerProtect = asyncHandler(async (req, res, next) => {
+  if (req.user.isManager) {
+    next()
+  } else {
+    res.status(401)
+    throw new Error('Debes ser Manager para acceder a esta ruta')
+  }
+})
+
+module.exports = { protect, adminProtect, managerProtect }
