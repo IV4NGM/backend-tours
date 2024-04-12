@@ -13,7 +13,7 @@ const reservationSchema = mongoose.Schema({
   },
   reserved_seats_amount: {
     type: Number,
-    required: true
+    required: [true, 'Por favor, ingresa la cantidad de asientos reservados']
   },
   confirmed_seats: [Number],
   promo_applied: {
@@ -29,9 +29,9 @@ const reservationSchema = mongoose.Schema({
   },
   total_price: {
     type: Number,
-    required: true
+    required: [true, 'Por favor, ingresa el precio total por pagar']
   },
-  paid_amount: {
+  amount_paid: {
     type: Number,
     default: 0
   },
@@ -39,29 +39,6 @@ const reservationSchema = mongoose.Schema({
     type: String,
     default: 'Pending'
   },
-  managing_history: [
-    {
-      type: new mongoose.Schema(
-        {
-          user: {
-            type: mongoose.Schema.Types.ObjectId,
-            required: true,
-            ref: 'User'
-          },
-          description: {
-            type: String,
-            required: true
-          },
-          comments: {
-            type: String,
-            default: ''
-          }
-        }, {
-          timestamps: true
-        }
-      )
-    }
-  ],
   isActive: {
     type: Boolean,
     default: true

@@ -3,11 +3,11 @@ const mongoose = require('mongoose')
 const clientSchema = mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Por favor, ingresa tu nombre']
+    required: [true, 'Por favor, ingresa el nombre del cliente']
   },
   phone_number: {
     type: String,
-    required: [true, 'Por favor, ingresa tu número de teléfono'],
+    required: [true, 'Por favor, ingresa el número de teléfono del cliente'],
     unique: true
   },
   isActive: {

@@ -14,6 +14,8 @@ const { errorHandler } = require('@/middleware/errorMiddleware')
 
 // Importar rutas
 const usersRoutes = require('@/routes/usersRoutes')
+const tourTemplatesRoutes = require('@/routes/tourTemplatesRoutes')
+const toursRoutes = require('@/routes/toursRoutes')
 
 // Establecer puerto
 const port = process.env.PORT || 5000
@@ -30,6 +32,8 @@ app.use(express.urlencoded({ extended: false }))
 
 // Usar rutas
 app.use('/api/users', usersRoutes)
+app.use('/api/templates', tourTemplatesRoutes)
+app.use('/api/tours', toursRoutes)
 
 // Usar middleware de manejo de errores
 app.use(errorHandler)
