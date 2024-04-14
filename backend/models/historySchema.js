@@ -1,17 +1,12 @@
 const mongoose = require('mongoose')
 
-const transactionDescriptionSchema = mongoose.Schema({
-  reservation: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    ref: 'Reservation'
-  },
+const historySchema = mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
     ref: 'User'
   },
-  transaction_type: {
+  action_type: {
     type: String,
     required: true
   },
@@ -22,7 +17,7 @@ const transactionDescriptionSchema = mongoose.Schema({
   amount: {
     type: Number
   },
-  comments: {
+  user_comments: {
     type: String,
     default: ''
   }
@@ -30,4 +25,4 @@ const transactionDescriptionSchema = mongoose.Schema({
   timestamps: true
 })
 
-module.exports = mongoose.model('TransactionDescription', transactionDescriptionSchema)
+module.exports = historySchema
