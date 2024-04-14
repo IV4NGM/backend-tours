@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+const historySchema = require('./historySchema')
+
 const promoSchema = mongoose.Schema({
   type: {
     type: String,
@@ -12,7 +14,7 @@ const promoSchema = mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: [true, 'Por favor, ingresa la cantidad de promociones disponibles']
+    default: 5
   },
   maxUsesPerReservation: {
     type: Number,
@@ -28,12 +30,7 @@ const promoSchema = mongoose.Schema({
   },
   code: {
     type: String,
-    required: [true, 'Por favor, ingresa el código de la promoción'],
-    unique: true
-  },
-  comments: {
-    type: String,
-    default: ''
+    required: [true, 'Por favor, ingresa el código de la promoción']
   },
   isActive: {
     type: Boolean,
@@ -65,11 +62,22 @@ const tourSchema = mongoose.Schema({
     type: Number,
     required: [true, 'Por favor, ingresa el precio']
   },
+  min_payment: {
+    type: Number,
+    required: [true, 'Por favor, ingresa el precio para reservar']
+  },
   promos: [promoSchema],
   status: {
-    type: String,
-    default: 'Active'
+    status_code: {
+      type: String,
+      default: 'Active'
+    },
+    description: {
+      type: String,
+      default: ''
+    }
   },
+  history: [historySchema],
   isActive: {
     type: Boolean,
     default: true
