@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+const historySchema = require('./historySchema')
+
 const clientSchema = mongoose.Schema({
   name: {
     type: String,
@@ -10,6 +12,10 @@ const clientSchema = mongoose.Schema({
     required: [true, 'Por favor, ingresa el número de teléfono del cliente'],
     unique: true
   },
+  email: {
+    type: String
+  },
+  history: [historySchema],
   isActive: {
     type: Boolean,
     default: true

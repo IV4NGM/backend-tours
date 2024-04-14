@@ -16,6 +16,8 @@ const { errorHandler } = require('@/middleware/errorMiddleware')
 const usersRoutes = require('@/routes/usersRoutes')
 const tourTemplatesRoutes = require('@/routes/tourTemplatesRoutes')
 const toursRoutes = require('@/routes/toursRoutes')
+const clientsRoutes = require('@/routes/clientsRoutes')
+const reservationsRoutes = require('@/routes/reservationsRoutes')
 
 // Establecer puerto
 const port = process.env.PORT || 5000
@@ -34,6 +36,8 @@ app.use(express.urlencoded({ extended: false }))
 app.use('/api/users', usersRoutes)
 app.use('/api/templates', tourTemplatesRoutes)
 app.use('/api/tours', toursRoutes)
+app.use('/api/clients', clientsRoutes)
+app.use('/api/reservations', reservationsRoutes)
 
 // Usar middleware de manejo de errores
 app.use(errorHandler)
