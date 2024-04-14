@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+const historySchema = require('./historySchema')
+
 const tourTemplateSchema = mongoose.Schema({
   name: {
     type: String,
@@ -8,6 +10,14 @@ const tourTemplateSchema = mongoose.Schema({
   description: {
     type: String,
     required: [true, 'Por favor, ingresa una descripción']
+  },
+  exercise_level: {
+    type: String,
+    default: 'Normal'
+  },
+  recommended_for: {
+    type: String,
+    default: 'Para toda la familia'
   },
   duration: {
     type: Number,
@@ -26,6 +36,7 @@ const tourTemplateSchema = mongoose.Schema({
     type: Boolean,
     default: false
   },
+  history: [historySchema],
   isActive: {
     type: Boolean,
     default: true

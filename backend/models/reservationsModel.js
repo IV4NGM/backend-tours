@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+const historySchema = require('./historySchema')
+
 const reservationSchema = mongoose.Schema({
   tour: {
     type: mongoose.Schema.Types.ObjectId,
@@ -17,28 +19,55 @@ const reservationSchema = mongoose.Schema({
   },
   confirmed_seats: [Number],
   promo_applied: {
-    promo: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      ref: 'Promo'
+    type: {
+      type: String,
+      required: [true, 'Por favor, ingresa el tipo de promoción'],
+      enum: ['2x1', 'discount', 'percentageDiscount']
+    },
+    value: {
+      type: Number,
+      default: 0
     },
     amount: {
       type: Number,
-      required: true
+      default: 1
+    },
+    code: {
+      type: String,
+      required: [true, 'Por favor, ingresa el código de la promoción'],
+      unique: true
     }
+  },
+  price_without_discounts: {
+    type: Number,
+    required: true
   },
   total_price: {
     type: Number,
-    required: [true, 'Por favor, ingresa el precio total por pagar']
+    required: true
+  },
+  price_to_pay: {
+    type: Number,
+    required: true
   },
   amount_paid: {
     type: Number,
     default: 0
   },
   status: {
-    type: String,
-    default: 'Pending'
+    status_code: {
+      type: String,
+      default: 'Pending'
+    },
+    description: {
+      type: String
+    }
   },
+  pending_devolution: {
+    type: Number,
+    default: 0
+  },
+  history: [historySchema],
   isActive: {
     type: Boolean,
     default: true

@@ -17,9 +17,17 @@ const createTemplate = asyncHandler(async (req, res) => {
     }
   }
 
+  const { comments, ...tourTemplateDataToCreate } = tourTemplateData
+
   const tourTemplateCreated = await TourTemplate.create({
-    ...tourTemplateData,
-    duration
+    ...tourTemplateDataToCreate,
+    duration,
+    history: {
+      user: req.user,
+      action_type: 'Plantilla creada',
+      description: 'Plantilla de tour creada',
+      user_comments: comments
+    }
   })
   if (tourTemplateCreated) {
     res.status(201).json(tourTemplateCreated)
@@ -83,9 +91,19 @@ const updateTemplate = asyncHandler(async (req, res) => {
       throw new Error('La plantilla no se encuentra en la base de datos')
     }
 
+    const { comments, ...tourTemplateDataToUpdate } = templateData
+
     const updatedTemplate = await TourTemplate.findOneAndUpdate(template, {
-      ...templateData,
-      duration
+      tourTemplateDataToUpdate,
+      duration,
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Plantilla modificada',
+          description: 'Plantilla de tour modificada',
+          user_comments: comments
+        }
+      }
     }, { new: true })
 
     if (!updatedTemplate) {
@@ -115,7 +133,16 @@ const deleteTemplate = asyncHandler(async (req, res) => {
       res.status(400)
       throw new Error('La plantilla no se encuentra en la base de datos')
     }
-    const updatedTemplate = await TourTemplate.findOneAndUpdate(template, { isActive: false }, { new: true })
+    const updatedTemplate = await TourTemplate.findOneAndUpdate(template, {
+      isActive: false,
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Plantilla eliminada',
+          description: 'Plantilla de tour eliminada'
+        }
+      }
+    }, { new: true })
 
     if (!updatedTemplate) {
       res.status(400)
