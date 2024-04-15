@@ -31,7 +31,7 @@ const createClient = asyncHandler(async (req, res) => {
           history: {
             user: req.user,
             action_type: 'Cliente reactivado',
-            description: 'Cliente reactivado (previamente existente)' + (reputation !== clientExists.reputation ? '. Email agregado' : ''),
+            description: 'Cliente reactivado (previamente existente)' + (reputation !== clientExists.reputation ? '. Email agregado. +5 reputación.' : ''),
             user_comments: comments
           }
         }
@@ -55,7 +55,7 @@ const createClient = asyncHandler(async (req, res) => {
       history: {
         user: req.user,
         action_type: 'Cliente creado',
-        description: 'Cliente creado' + (reputation === 15 ? ' con email' : ''),
+        description: 'Cliente creado' + (reputation === 15 ? ' con email. +15 reputación.' : '. +10 reputación.'),
         user_comments: comments
       }
     })
@@ -132,7 +132,7 @@ const updateClient = asyncHandler(async (req, res) => {
         history: {
           user: req.user,
           action_type: 'Cliente modificado',
-          description: 'Cliente modificado' + (reputation !== client.reputation ? '. Email agregado' : ''),
+          description: 'Cliente modificado' + (reputation !== client.reputation ? '. Email agregado. +5 reputación.' : ''),
           user_comments: comments
         }
       }
