@@ -23,7 +23,7 @@ const createClient = asyncHandler(async (req, res) => {
         reputation = reputation + 5
       }
 
-      const updatedClient = await Client.findOneAndUpdate(clientExists, {
+      const updatedClient = await Client.findOneAndUpdate({ phone_number: clientData.phone_number }, {
         ...clientDataToCreate,
         reputation,
         isActive: true,
@@ -125,7 +125,7 @@ const updateClient = asyncHandler(async (req, res) => {
     }
     const { comments, ...clientDataToUpdate } = clientData
 
-    const updatedClient = await Client.findOneAndUpdate(client, {
+    const updatedClient = await Client.findOneAndUpdate({ phone_number: phoneNumber }, {
       ...clientDataToUpdate,
       reputation,
       $push: {

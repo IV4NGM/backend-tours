@@ -199,7 +199,7 @@ const updateTour = asyncHandler(async (req, res) => {
       throw new Error(message)
     }
 
-    const updatedTour = await Tour.findOneAndUpdate(tour, {
+    const updatedTour = await Tour.findOneAndUpdate({ _id: tourId }, {
       ...tourDataToUpdate,
       $push: {
         history: {
@@ -237,7 +237,7 @@ const addPromos = asyncHandler(async (req, res) => {
     res.status(400)
     throw new Error('Debes enviar al menos una promoción')
   }
-  const codes = promos.map((promo) => promo.code).toString()
+  const codes = promos.map((promo) => promo.code).join(', ')
 
   try {
     const tour = await Tour.findOne({ _id: tourId })
@@ -261,7 +261,7 @@ const addPromos = asyncHandler(async (req, res) => {
       throw new Error(promosErrorMessage)
     }
 
-    const updatedTour = await Tour.findOneAndUpdate(tour, {
+    const updatedTour = await Tour.findOneAndUpdate({ _id: tourId }, {
       $push: {
         promos: {
           $each: promos
@@ -347,7 +347,7 @@ const editPromo = asyncHandler(async (req, res) => {
       }
     })
 
-    const updatedTour = await Tour.findOneAndUpdate(tour, {
+    const updatedTour = await Tour.findOneAndUpdate({ _id: tourId }, {
       promos: allPromos,
       $push: {
         history: {
@@ -405,7 +405,7 @@ const deletePromo = asyncHandler(async (req, res) => {
 
     allPromos = allPromos.filter((originalPromo) => originalPromo.code !== code)
 
-    const updatedTour = await Tour.findOneAndUpdate(tour, {
+    const updatedTour = await Tour.findOneAndUpdate({ _id: tourId }, {
       promos: allPromos,
       $push: {
         history: {

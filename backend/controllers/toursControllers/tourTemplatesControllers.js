@@ -93,7 +93,7 @@ const updateTemplate = asyncHandler(async (req, res) => {
 
     const { comments, ...tourTemplateDataToUpdate } = templateData
 
-    const updatedTemplate = await TourTemplate.findOneAndUpdate(template, {
+    const updatedTemplate = await TourTemplate.findOneAndUpdate({ _id: templateId }, {
       tourTemplateDataToUpdate,
       duration,
       $push: {
@@ -133,7 +133,7 @@ const deleteTemplate = asyncHandler(async (req, res) => {
       res.status(400)
       throw new Error('La plantilla no se encuentra en la base de datos')
     }
-    const updatedTemplate = await TourTemplate.findOneAndUpdate(template, {
+    const updatedTemplate = await TourTemplate.findOneAndUpdate({ _id: templateId }, {
       isActive: false,
       $push: {
         history: {
