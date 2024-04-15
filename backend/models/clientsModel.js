@@ -13,7 +13,12 @@ const clientSchema = mongoose.Schema({
     unique: true
   },
   email: {
-    type: String
+    type: String,
+    default: ''
+  },
+  reputation: {
+    type: Number,
+    default: 10
   },
   history: [historySchema],
   isActive: {

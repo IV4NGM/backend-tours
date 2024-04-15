@@ -18,14 +18,20 @@ const createClient = asyncHandler(async (req, res) => {
       res.status(400)
       throw new Error('Ya se encuentra registrado un cliente con este número')
     } else {
+      let reputation = clientExists.reputation || 10
+      if (!clientExists.email && clientData.email) {
+        reputation = reputation + 5
+      }
+
       const updatedClient = await Client.findOneAndUpdate(clientExists, {
         ...clientDataToCreate,
+        reputation,
         isActive: true,
         $push: {
           history: {
             user: req.user,
-            action_type: 'Cliente creado',
-            description: 'Cliente creado (previamente existente)',
+            action_type: 'Cliente reactivado',
+            description: 'Cliente reactivado (previamente existente)' + (reputation !== clientExists.reputation ? '. Email agregado' : ''),
             user_comments: comments
           }
         }
@@ -39,12 +45,17 @@ const createClient = asyncHandler(async (req, res) => {
       }
     }
   } else {
+    let reputation = 10
+    if (clientData.email) {
+      reputation = reputation + 5
+    }
     const clientCreated = await Client.create({
       ...clientDataToCreate,
+      reputation,
       history: {
         user: req.user,
         action_type: 'Cliente creado',
-        description: 'Cliente creado',
+        description: 'Cliente creado' + (reputation === 15 ? ' con email' : ''),
         user_comments: comments
       }
     })
@@ -95,7 +106,7 @@ const updateClient = asyncHandler(async (req, res) => {
   const phoneNumber = req.params.phone
   const clientData = req.body
 
-  if (!clientData.name && !clientData.email) {
+  if (!clientData.name && !clientData.email && !clientData.comments) {
     res.status(400)
     throw new Error('Debes ingresar al menos un campo para actualizar')
   }
@@ -107,15 +118,21 @@ const updateClient = asyncHandler(async (req, res) => {
       res.status(400)
       throw new Error('El cliente no se encuentra en la base de datos')
     }
+
+    let reputation = client.reputation
+    if (!client.email && clientData.email) {
+      reputation = reputation + 5
+    }
     const { comments, ...clientDataToUpdate } = clientData
 
     const updatedClient = await Client.findOneAndUpdate(client, {
       ...clientDataToUpdate,
+      reputation,
       $push: {
         history: {
           user: req.user,
           action_type: 'Cliente modificado',
-          description: 'Cliente modificado',
+          description: 'Cliente modificado' + (reputation !== client.reputation ? '. Email agregado' : ''),
           user_comments: comments
         }
       }
