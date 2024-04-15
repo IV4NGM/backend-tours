@@ -58,6 +58,11 @@ const tourSchema = mongoose.Schema({
     type: Number,
     default: 0
   },
+  reservations: [{
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'Reservation'
+  }],
   price: {
     type: Number,
     required: [true, 'Por favor, ingresa el precio']

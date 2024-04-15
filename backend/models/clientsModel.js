@@ -20,6 +20,11 @@ const clientSchema = mongoose.Schema({
     type: Number,
     default: 10
   },
+  reservations: [{
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'Reservation'
+  }],
   history: [historySchema],
   isActive: {
     type: Boolean,
