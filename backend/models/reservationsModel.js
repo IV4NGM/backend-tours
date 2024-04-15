@@ -21,7 +21,6 @@ const reservationSchema = mongoose.Schema({
   promo_applied: {
     type: {
       type: String,
-      required: [true, 'Por favor, ingresa el tipo de promoción'],
       enum: ['2x1', 'discount', 'percentageDiscount']
     },
     value: {
@@ -29,14 +28,15 @@ const reservationSchema = mongoose.Schema({
       default: 0
     },
     amount: {
-      type: Number,
-      default: 1
+      type: Number
     },
     code: {
-      type: String,
-      required: [true, 'Por favor, ingresa el código de la promoción'],
-      unique: true
+      type: String
     }
+  },
+  price_to_reserve: {
+    type: Number,
+    required: true
   },
   price_without_discounts: {
     type: Number,
@@ -60,7 +60,8 @@ const reservationSchema = mongoose.Schema({
       default: 'Pending'
     },
     description: {
-      type: String
+      type: String,
+      default: 'Pago mínimo para reservar pendiente.'
     }
   },
   pending_devolution: {

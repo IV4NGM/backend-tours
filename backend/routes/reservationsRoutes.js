@@ -1,6 +1,9 @@
 const { Router } = require('express')
 const router = Router()
-// const { createTour, getTour, getAllTours, updateTour, addPromos, editPromo, deletePromo, deleteTour } = require('@/controllers/toursControllers/toursControllers')
+const { createReservation, makeDeposit } = require('@/controllers/reservationsControllers/reservationsControllers')
 const { protect, adminProtect } = require('@/middleware/authMiddleware')
+
+router.post('/create/:id/:phone', protect, createReservation)
+router.post('/deposit/:id', protect, makeDeposit)
 
 module.exports = router
