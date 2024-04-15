@@ -235,7 +235,6 @@ const createReservation = asyncHandler(async (req, res) => {
 
       const updatedPromo = { ...validPromoData._doc }
       updatedPromo.usedCount = updatedPromo.usedCount + promoAmount
-      console.log(updatedPromo)
 
       let newTourPromos = [...tourPromos]
       newTourPromos = newTourPromos.map((originalPromo) => {
@@ -402,7 +401,63 @@ const makeDeposit = asyncHandler(async (req, res) => {
   }
 })
 
+const blockedSeats = [3, 4]
+
+const chooseSeats = asyncHandler(async (req, res) => {
+  const reservationId = req.params.id
+  const { comments, selected_seats: selectedSeats } = req.body
+  if (!selectedSeats) {
+    throw new Error('Debes ingresar todos los datos')
+  }
+
+  try {
+    const reservation = await Reservation.findOne({ _id: reservationId })
+    if (!reservation || !reservation.isActive) {
+      res.status(400)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    }
+
+    if (reservation.status.status_code !== 'Choose seats') {
+      res.status(400)
+      throw new Error('La reservación no admite escoger asientos')
+    }
+
+    // let usedSeats = [...reservation.confirmed_seats]
+    // usedSeats = usedSeats.concat(blockedSeats)
+    // const availableSeats = Array.from({ length: reservation.total_seats + blockedSeats.length }, (_, index) => index + 1).filter((seat) => !usedSeats.includes(seat))
+    // if (selectedSeats.some((seat) => !availableSeats.includes(seat))) {
+    //   res.status(400)
+    //   throw new Error('Asientos no disponibles')
+    // }
+    const updatedTour = await Tour.findOneAndUpdate({ _id: reservation.tour._id }, {
+      $push: {
+        confirmed_seats: {
+          $each: selectedSeats
+        }
+      }
+    }, {
+      new: true,
+      runValidators: true
+    })
+    if (updatedTour) {
+      res.status(200).json(updatedTour)
+    } else {
+      res.status(400)
+      throw new Error('No se pudieron seleccionar los asientos')
+    }
+  } catch (error) {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      res.status(404)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    } else {
+      res.status(res.statusCode || 400)
+      throw new Error(error.message || 'No se pudo escoger los asientos')
+    }
+  }
+})
+
 module.exports = {
   createReservation,
-  makeDeposit
+  makeDeposit,
+  chooseSeats
 }
