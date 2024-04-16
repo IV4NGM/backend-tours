@@ -156,7 +156,7 @@ const createReservation = asyncHandler(async (req, res) => {
       if (tourAvailableSeatsAmount === 0) {
         throw new Error('Ya no hay asientos disponibles para este tour')
       } else {
-        throw new Error('Solo quedan ' + tourAvailableSeatsAmount.toString() + ' asientos disponibles')
+        throw new Error('Solo hay ' + tourAvailableSeatsAmount.toString() + ' asiento(s) disponibles')
       }
     }
 
@@ -258,6 +258,7 @@ const createReservation = asyncHandler(async (req, res) => {
         default:
           break
       }
+      reservationDataToCreate.price_to_reserve = Math.min(priceToReserve, totalPrice)
       reservationDataToCreate.total_price = totalPrice
       reservationDataToCreate.price_to_pay = totalPrice
 
@@ -691,10 +692,153 @@ const changeConfirmedSeats = asyncHandler(async (req, res) => {
   }
 })
 
+const reduceReservedSeatsAmountSession = async (req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    await Tour.findOneAndUpdate({ _id: tour._id }, {
+      reserved_seats_amount: tour.reserved_seats_amount + seatsAmountToReduce,
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Asientos reservados liberados',
+          description: 'Cantidad de asientos liberados: ' + seatsAmountToReduce + '. Reservación: ' + reservation._id,
+          user_comments: comments
+        }
+      }
+    }, {
+      new: true,
+      session
+    })
+
+    let newPriceToReserve = reservation.price_to_reserve
+    let newPriceToPay = reservation.price_to_pay
+
+    if (reservation.promo_applied.type) {
+      const newPromoApplied = { ...reservation.promo_applied }
+
+      if (newPromoApplied.type === '2x1') {
+        if (reservation.reserved_seats_amount % 2 === 0) {
+          // En este caso el cliente pierde varias promociones 2 x 1
+          newPromoApplied.amount = newPromoApplied.amount - 1
+        } else {
+          newPriceToPay = Math.max(reservation.price_to_pay - tour.price, 0)
+        }
+      } else if (newPromoApplied.type === 'discount') {
+        newPriceToPay = Math.max(reservation.price_to_pay - tour.price, 0)
+      }
+      newPriceToReserve = Math.min(reservation.price_to_reserve, newPriceToPay)
+    } else {
+      newPriceToReserve = Math.max(reservation.price_to_reserve - seatsAmountToReduce * tour.min_payment, 0)
+      newPriceToPay = Math.max(reservation.price_to_pay - seatsAmountToReduce * tour.price, 0)
+    }
+
+    // const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
+    //   price_to_reserve: newPriceToReserve,
+    //   price_to_pay: newPriceToPay,
+    //   $push: {
+    //     history: {
+    //       user: req.user,
+    //       action_type: 'Descuento agregado',
+    //       description: 'Descuento agregado: $' + discountAmount.toString(),
+    //       user_comments: comments
+    //     }
+    //   }
+    // }, { new: true, session })
+
+    // if (isReputationChanged) {
+    //   await Client.findOneAndUpdate({ _id: client._id }, {
+    //     reputation: client.reputation + reputationChange,
+    //     $push: {
+    //       reservations: reservation,
+    //       history: {
+    //         user: req.user,
+    //         action_type: 'Reservación pagada',
+    //         description: 'Reservación pagada por descuento. Id: ' + reservation._id + '. +' + reputationChange?.toString() + ' reputación.',
+    //         user_comments: comments
+    //       }
+    //     }
+    //   },
+    //   { new: true, session })
+    // }
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json(updatedReservation)
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(400)
+    throw new Error('No se pudo actualizar la reservación')
+  }
+}
+
+const reduceReservedSeatsAmount = asyncHandler(async (req, res) => {
+  const reservationId = req.params.id
+  const { comments, seats_amount: seatsAmount, surcharge } = req.body
+  if (!seatsAmount) {
+    throw new Error('Debes ingresar todos los datos')
+  }
+
+  let generateSurcharge = true
+  if (req.user.isAdmin) {
+    generateSurcharge = !surcharge || surcharge !== 'false'
+  }
+
+  const seatsAmountToReduce = Number(seatsAmount)
+  if (isNaN(seatsAmountToReduce) || !isFinite(seatsAmountToReduce) || seatsAmountToReduce <= 0 || !Number.isInteger(seatsAmountToReduce)) {
+    res.status(400)
+    throw new Error('La cantidad de asientos a disminuir debe ser un entero positivo')
+  }
+
+  try {
+    const reservation = await Reservation.findOne({ _id: reservationId })
+    if (!reservation || !reservation.isActive) {
+      res.status(400)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    }
+
+    if (reservation.status.status_code !== 'Pending' && reservation.status.status_code !== 'Accepted') {
+      res.status(400)
+      throw new Error('La reservación no admite una disminución de la cantidad de asientos')
+    }
+
+    const newSeatsAmount = reservation.reserved_seats_amount - seatsAmountToReduce
+    if (newSeatsAmount <= 0) {
+      res.status(400)
+      throw new Error('No se puede disminuir esta cantidad de asientos')
+    }
+
+    if (reservation.has_extra_discounts) {
+      res.status(400)
+      throw new Error('No se pueden disminuir asientos de reservas con descuentos extra')
+    }
+
+    const tour = await Tour.findOne({ _id: reservation.tour._id })
+
+    if (!tour || !tour.isActive) {
+      res.status(400)
+      throw new Error('El tour no se encuentra en la base de datos')
+    }
+
+    await reduceReservedSeatsAmountSession(req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge)
+  } catch (error) {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      res.status(404)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    } else {
+      res.status(res.statusCode || 400)
+      throw new Error(error.message || 'No se pudo actualizar la reservación')
+    }
+  }
+})
+
 module.exports = {
   createReservation,
   makeDeposit,
   chooseSeats,
   makeDevolution,
-  changeConfirmedSeats
+  changeConfirmedSeats,
+  reduceReservedSeatsAmount
 }
