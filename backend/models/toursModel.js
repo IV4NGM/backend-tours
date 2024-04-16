@@ -53,23 +53,34 @@ const tourSchema = mongoose.Schema({
     type: Number,
     required: [true, 'Por favor, ingresa el número total de asientos']
   },
+  total_seats_numbers: {
+    type: [Number],
+    validate: {
+      validator: function (seatsArray) {
+        return seatsArray.length === this.total_seats
+      },
+      message: props => `${props.path}: Debe ingresarse todos los números de asientos disponibles`
+    }
+  },
   confirmed_seats: {
     type: [Number],
     validate: {
       validator: function (seatsArray) {
-        console.log('seatsArray:', seatsArray) // Add logging
         const seatsSet = new Set(seatsArray)
-        console.log('seatsSet:', seatsSet) // Add logging
-        const isValid = seatsSet.size === seatsArray.length
-        console.log('isValid:', isValid) // Add logging
-        return isValid
+        return seatsSet.size === seatsArray.length
       },
       message: props => `${props.path}: No se pueden repetir números de asientos`
     }
   },
   reserved_seats_amount: {
     type: Number,
-    default: 0
+    default: 0,
+    validate: {
+      validator: function (seatsAmount) {
+        return seatsAmount <= this.total_seats
+      },
+      message: props => `${props.path}: No se pueden reservar más asientos que el total`
+    }
   },
   reservations: [{
     type: mongoose.Schema.Types.ObjectId,

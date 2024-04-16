@@ -110,10 +110,23 @@ const createTour = asyncHandler(async (req, res) => {
       throw new Error('La plantilla no se encuentra en la base de datos')
     }
 
-    const { template_id: templateId, comments, ...tourDataToCreate } = tourData
+    const { template_id: templateId, comments, blocked_seats: blockedSeats, ...tourDataToCreate } = tourData
+    const totalSeatsNumbers = []
+    if (!blockedSeats) {
+      for (let i = 1; i <= tourDataToCreate.total_seats; i++) {
+        totalSeatsNumbers.push(i)
+      }
+    } else {
+      for (let i = 1; i <= tourDataToCreate.total_seats + blockedSeats.length; i++) {
+        if (!blockedSeats.includes(i)) {
+          totalSeatsNumbers.push(i)
+        }
+      }
+    }
     const tourCreated = await Tour.create({
       tourTemplate,
       ...tourDataToCreate,
+      total_seats_numbers: totalSeatsNumbers,
       confirmed_seats: [],
       reserved_seats_amount: 0,
       history: {
