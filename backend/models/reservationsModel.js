@@ -62,6 +62,10 @@ const reservationSchema = mongoose.Schema({
     description: {
       type: String,
       default: 'Pago mínimo para reservar pendiente.'
+    },
+    next_status: {
+      status_code: String,
+      description: String
     }
   },
   pending_devolution: {

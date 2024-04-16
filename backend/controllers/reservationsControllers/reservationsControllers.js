@@ -286,25 +286,29 @@ const createReservation = asyncHandler(async (req, res) => {
 
 const getNewStatus = (reservation, newAmountPaid) => {
   const maxReputationChange = Math.floor(reservation.price_to_pay / 1000)
+  const maxPendingDevolution = Math.max(newAmountPaid - reservation.price_to_pay, 0)
   if (newAmountPaid > reservation.price_to_pay + 1) {
     return ({
       status_code: 'Choose seats',
       description: 'Asientos disponibles para escoger. Hacer devolución por monto excedido.',
-      reputationChange: maxReputationChange
+      reputationChange: maxReputationChange,
+      pendingDevolution: maxPendingDevolution
     })
   }
   if (newAmountPaid > reservation.price_to_pay - 1) {
     return ({
       status_code: 'Choose seats',
       description: 'Asientos disponibles para escoger.',
-      reputationChange: maxReputationChange
+      reputationChange: maxReputationChange,
+      pendingDevolution: 0
     })
   }
   if (newAmountPaid >= reservation.price_to_reserve) {
     return ({
       status_code: 'Accepted',
       description: 'Pago mínimo para reservar realizado.',
-      reputationChange: 0
+      reputationChange: 0,
+      pendingDevolution: 0
     })
   }
   return { ...reservation.status, reputationChange: 0 }
@@ -316,10 +320,11 @@ const makeDepositSession = async (req, res, comments, reservation, client, depos
 
   try {
     const newAmountPaid = reservation.amount_paid + depositAmount
-    const { reputationChange, ...status } = getNewStatus(reservation, newAmountPaid)
+    const { reputationChange, pendingDevolution, ...status } = getNewStatus(reservation, newAmountPaid)
     const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
       status,
       amount_paid: newAmountPaid,
+      pending_devolution: pendingDevolution,
       $push: {
         history: {
           user: req.user,
@@ -353,7 +358,7 @@ const makeDepositSession = async (req, res, comments, reservation, client, depos
     await session.abortTransaction()
     session.endSession()
     res.status(400)
-    throw new Error('No se pudo crear la reservación')
+    throw new Error('No se pudo crear el depósito')
   }
 }
 
@@ -401,7 +406,71 @@ const makeDeposit = asyncHandler(async (req, res) => {
   }
 })
 
-const blockedSeats = [3, 4]
+const getStatusAfterChoosingSeats = (reservation) => {
+  if (reservation.pending_devolution > 0) {
+    return ({
+      status_code: 'Pending devolution',
+      description: 'Reservación completa. Devolución pendiente de $' + reservation.pending_devolution.toString(),
+      next_status: {
+        status_code: 'Completed',
+        description: 'Reservación completa'
+      }
+    })
+  }
+  return ({
+    status_code: 'Completed',
+    description: 'Reservación completa'
+  })
+}
+
+const chooseSeatsSession = async (req, res, comments, reservation, selectedSeats) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    const status = getStatusAfterChoosingSeats(reservation)
+
+    await Tour.findOneAndUpdate({ _id: reservation.tour._id }, {
+      $push: {
+        confirmed_seats: {
+          $each: selectedSeats
+        },
+        history: {
+          user: req.user,
+          action_type: 'Asientos escogidos',
+          description: 'Asientos escogidos: ' + selectedSeats.join(', ') + '. Reservación: ' + reservation._id,
+          user_comments: comments
+        }
+      }
+    }, {
+      new: true,
+      runValidators: true,
+      session
+    })
+
+    const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
+      status,
+      confirmed_seats: selectedSeats,
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Asientos escogidos',
+          description: 'Asientos escogidos: ' + selectedSeats.join(', '),
+          user_comments: comments
+        }
+      }
+    }, { new: true, session })
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json(updatedReservation)
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(400)
+    throw new Error('No se pudo seleccionar los asientos')
+  }
+}
 
 const chooseSeats = asyncHandler(async (req, res) => {
   const reservationId = req.params.id
@@ -419,32 +488,27 @@ const chooseSeats = asyncHandler(async (req, res) => {
 
     if (reservation.status.status_code !== 'Choose seats') {
       res.status(400)
-      throw new Error('La reservación no admite escoger asientos')
+      throw new Error('La reservación no permite escoger asientos')
     }
 
-    // let usedSeats = [...reservation.confirmed_seats]
-    // usedSeats = usedSeats.concat(blockedSeats)
-    // const availableSeats = Array.from({ length: reservation.total_seats + blockedSeats.length }, (_, index) => index + 1).filter((seat) => !usedSeats.includes(seat))
-    // if (selectedSeats.some((seat) => !availableSeats.includes(seat))) {
-    //   res.status(400)
-    //   throw new Error('Asientos no disponibles')
-    // }
-    const updatedTour = await Tour.findOneAndUpdate({ _id: reservation.tour._id }, {
-      $push: {
-        confirmed_seats: {
-          $each: selectedSeats
-        }
-      }
-    }, {
-      new: true,
-      runValidators: true
-    })
-    if (updatedTour) {
-      res.status(200).json(updatedTour)
-    } else {
+    if (selectedSeats.length !== reservation.reserved_seats_amount) {
       res.status(400)
-      throw new Error('No se pudieron seleccionar los asientos')
+      throw new Error('El número de asientos no coincide con el de la reservación')
     }
+
+    const tour = await Tour.findOne({ _id: reservation.tour._id })
+
+    if (!tour || !tour.isActive) {
+      res.status(400)
+      throw new Error('El tour no se encuentra en la base de datos')
+    }
+
+    const availableSeats = tour.total_seats_numbers.filter((seat) => !tour.confirmed_seats.includes(seat))
+    if (selectedSeats.some((seat) => !availableSeats.includes(seat))) {
+      res.status(400)
+      throw new Error('Asientos no disponibles')
+    }
+    await chooseSeatsSession(req, res, comments, reservation, selectedSeats)
   } catch (error) {
     if (error.name === 'CastError' && error.kind === 'ObjectId') {
       res.status(404)
