@@ -72,6 +72,10 @@ const reservationSchema = mongoose.Schema({
     type: Number,
     default: 0
   },
+  has_extra_discounts: {
+    type: Boolean,
+    default: false
+  },
   history: [historySchema],
   isActive: {
     type: Boolean,

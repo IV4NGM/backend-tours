@@ -40,6 +40,7 @@ const addDiscountSession = async (req, res, comments, reservation, newPriceToRes
       status,
       price_to_reserve: newPriceToReserve,
       price_to_pay: newPriceToPay,
+      has_extra_discounts: true,
       $push: {
         history: {
           user: req.user,
