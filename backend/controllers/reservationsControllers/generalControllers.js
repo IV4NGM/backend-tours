@@ -258,7 +258,8 @@ const createReservation = asyncHandler(async (req, res) => {
         default:
           break
       }
-      reservationDataToCreate.price_to_reserve = Math.min(priceToReserve, totalPrice)
+      // El precio para reservar es igual al precio total en las promos
+      reservationDataToCreate.price_to_reserve = totalPrice
       reservationDataToCreate.total_price = totalPrice
       reservationDataToCreate.price_to_pay = totalPrice
 
@@ -286,7 +287,7 @@ const createReservation = asyncHandler(async (req, res) => {
 })
 
 const getNewStatus = (reservation, newAmountPaid) => {
-  const maxReputationChange = Math.floor(reservation.price_to_pay / 1000)
+  const maxReputationChange = 3 * Math.floor(reservation.price_to_pay / 1000)
   const maxPendingDevolution = Math.max(newAmountPaid - reservation.price_to_pay, 0)
   if (newAmountPaid > reservation.price_to_pay + 1) {
     return ({
@@ -692,13 +693,84 @@ const changeConfirmedSeats = asyncHandler(async (req, res) => {
   }
 })
 
-const reduceReservedSeatsAmountSession = async (req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge) => {
+const getNewStatusAfterReducingSeatsAmount = (reservation, newPriceToPay, newPriceToReserve) => {
+  let reputationToReduce = Math.ceil(Math.max((reservation.price_to_pay - newPriceToPay) / 1000, 0))
+  if (reservation.status.status_code === 'Accepted') {
+    reputationToReduce = reputationToReduce * 2
+  }
+  const maxReputationToAdd = 3 * Math.floor(newPriceToPay / 1000)
+  const maxPendingDevolution = Math.max(reservation.amount_paid - newPriceToPay, 0)
+  if (reservation.amount_paid > newPriceToPay + 1) {
+    return ({
+      status_code: 'Choose seats',
+      description: 'Asientos disponibles para escoger. Hacer devolución por monto excedido.',
+      reputationChange: maxReputationToAdd - reputationToReduce,
+      pendingDevolution: maxPendingDevolution
+    })
+  }
+  if (reservation.amount_paid > newPriceToPay - 1) {
+    return ({
+      status_code: 'Choose seats',
+      description: 'Asientos disponibles para escoger.',
+      reputationChange: maxReputationToAdd - reputationToReduce,
+      pendingDevolution: 0
+    })
+  }
+  if (reservation.amount_paid >= newPriceToReserve) {
+    return ({
+      status_code: 'Accepted',
+      description: 'Pago mínimo para reservar realizado.',
+      reputationChange: -reputationToReduce,
+      pendingDevolution: 0
+    })
+  }
+  return ({
+    ...reservation.status,
+    reputationChange: -reputationToReduce,
+    pendingDevolution: 0
+  })
+}
+
+const reduceReservedSeatsAmountSession = async (req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge, client) => {
   const session = await mongoose.startSession()
   session.startTransaction()
 
   try {
+    let newPriceToReserve = tour.min_payment * newSeatsAmount
+    let newPriceToPay = tour.price * newSeatsAmount
+    const newPromoApplied = { ...reservation.promo_applied }
+
+    if (reservation.promo_applied?.type) {
+      if (newPromoApplied.type === '2x1') {
+        newPromoApplied.amount = Math.min(Math.floor(newSeatsAmount / 2), newPromoApplied.amount)
+      }
+
+      switch (newPromoApplied.type) {
+        case '2x1':
+          newPriceToPay = Math.max(newPriceToPay - tour.price * newPromoApplied.amount, 0)
+          break
+        case 'discount':
+          newPriceToPay = Math.max(newPriceToPay - newPromoApplied.value, 0)
+          break
+        case 'percentageDiscount':
+          newPriceToPay = Math.max(Math.min(1 - newPromoApplied.value / 100, 1), 0) * newPriceToPay
+          break
+        default:
+          break
+      }
+      // El precio para reservar es igual al precio total en las promos
+      newPriceToReserve = newPriceToPay
+    } else {
+      if (reservation.status.status_code === 'Accepted' && generateSurcharge) {
+        newPriceToReserve = newPriceToReserve + tour.min_payment * seatsAmountToReduce
+        newPriceToPay = newPriceToPay + tour.min_payment * seatsAmountToReduce
+      }
+    }
+
+    const { pendingDevolution, reputationChange, ...status } = getNewStatusAfterReducingSeatsAmount(reservation, newPriceToPay, newPriceToReserve)
+
     await Tour.findOneAndUpdate({ _id: tour._id }, {
-      reserved_seats_amount: tour.reserved_seats_amount + seatsAmountToReduce,
+      reserved_seats_amount: tour.reserved_seats_amount - seatsAmountToReduce,
       $push: {
         history: {
           user: req.user,
@@ -712,56 +784,36 @@ const reduceReservedSeatsAmountSession = async (req, res, comments, reservation,
       session
     })
 
-    let newPriceToReserve = reservation.price_to_reserve
-    let newPriceToPay = reservation.price_to_pay
-
-    if (reservation.promo_applied.type) {
-      const newPromoApplied = { ...reservation.promo_applied }
-
-      if (newPromoApplied.type === '2x1') {
-        if (reservation.reserved_seats_amount % 2 === 0) {
-          // En este caso el cliente pierde varias promociones 2 x 1
-          newPromoApplied.amount = newPromoApplied.amount - 1
-        } else {
-          newPriceToPay = Math.max(reservation.price_to_pay - tour.price, 0)
+    const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
+      status,
+      pending_devolution: pendingDevolution,
+      promo_applied: newPromoApplied,
+      reserved_seats_amount: newSeatsAmount,
+      price_to_pay: newPriceToPay,
+      price_to_reserve: newPriceToReserve,
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Asientos reservados liberados',
+          description: 'Cantidad de asientos liberados: ' + seatsAmountToReduce,
+          user_comments: comments
         }
-      } else if (newPromoApplied.type === 'discount') {
-        newPriceToPay = Math.max(reservation.price_to_pay - tour.price, 0)
       }
-      newPriceToReserve = Math.min(reservation.price_to_reserve, newPriceToPay)
-    } else {
-      newPriceToReserve = Math.max(reservation.price_to_reserve - seatsAmountToReduce * tour.min_payment, 0)
-      newPriceToPay = Math.max(reservation.price_to_pay - seatsAmountToReduce * tour.price, 0)
-    }
+    }, { new: true, session })
 
-    // const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
-    //   price_to_reserve: newPriceToReserve,
-    //   price_to_pay: newPriceToPay,
-    //   $push: {
-    //     history: {
-    //       user: req.user,
-    //       action_type: 'Descuento agregado',
-    //       description: 'Descuento agregado: $' + discountAmount.toString(),
-    //       user_comments: comments
-    //     }
-    //   }
-    // }, { new: true, session })
-
-    // if (isReputationChanged) {
-    //   await Client.findOneAndUpdate({ _id: client._id }, {
-    //     reputation: client.reputation + reputationChange,
-    //     $push: {
-    //       reservations: reservation,
-    //       history: {
-    //         user: req.user,
-    //         action_type: 'Reservación pagada',
-    //         description: 'Reservación pagada por descuento. Id: ' + reservation._id + '. +' + reputationChange?.toString() + ' reputación.',
-    //         user_comments: comments
-    //       }
-    //     }
-    //   },
-    //   { new: true, session })
-    // }
+    await Client.findOneAndUpdate({ _id: client._id }, {
+      reputation: client.reputation + reputationChange,
+      $push: {
+        reservations: reservation,
+        history: {
+          user: req.user,
+          action_type: 'Asientos reservados liberados',
+          description: 'Cantidad de asientos liberados: ' + seatsAmountToReduce + '. Reservación: ' + reservation._id + '. Cambio en reputación: ' + reputationChange.toString() + ' reputación.',
+          user_comments: comments
+        }
+      }
+    },
+    { new: true, session })
 
     await session.commitTransaction()
     session.endSession()
@@ -801,7 +853,7 @@ const reduceReservedSeatsAmount = asyncHandler(async (req, res) => {
 
     if (reservation.status.status_code !== 'Pending' && reservation.status.status_code !== 'Accepted') {
       res.status(400)
-      throw new Error('La reservación no admite una disminución de la cantidad de asientos')
+      throw new Error('La reservación no admite una disminución de la cantidad de asientos reservados')
     }
 
     const newSeatsAmount = reservation.reserved_seats_amount - seatsAmountToReduce
@@ -822,7 +874,264 @@ const reduceReservedSeatsAmount = asyncHandler(async (req, res) => {
       throw new Error('El tour no se encuentra en la base de datos')
     }
 
-    await reduceReservedSeatsAmountSession(req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge)
+    const client = await Client.findOne({ _id: reservation.client._id })
+
+    if (!client || !client.isActive) {
+      res.status(400)
+      throw new Error('El cliente no se encuentra en la base de datos')
+    }
+
+    await reduceReservedSeatsAmountSession(req, res, comments, reservation, seatsAmountToReduce, newSeatsAmount, tour, generateSurcharge, client)
+  } catch (error) {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      res.status(404)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    } else {
+      res.status(res.statusCode || 400)
+      throw new Error(error.message || 'No se pudo actualizar la reservación')
+    }
+  }
+})
+
+const reduceConfirmedSeatsSession = async (req, res, comments, reservation, seatsToDelete, tour, client, newSeatsAmount) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    const newTourSeats = tour.confirmed_seats.filter(seat => !seatsToDelete.includes(seat))
+    await Tour.findOneAndUpdate({ _id: tour._id }, {
+      reserved_seats_amount: tour.reserved_seats_amount - seatsToDelete.length,
+      $set: {
+        confirmed_seats: newTourSeats
+      },
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Asientos confirmados liberados',
+          description: 'Asientos liberados: [' + seatsToDelete.join(', ') + ']. Reservación: ' + reservation._id,
+          user_comments: comments
+        }
+      }
+    }, {
+      new: true,
+      session
+    })
+
+    const newReservedSeats = reservation.confirmed_seats.filter(seat => !seatsToDelete.includes(seat))
+
+    const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
+      reserved_seats_amount: newSeatsAmount,
+      $set: {
+        confirmed_seats: newReservedSeats
+      },
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Asientos confirmados liberados',
+          description: 'Asientos liberados: [' + seatsToDelete.join(', ') + ']',
+          user_comments: comments
+        }
+      }
+    }, { new: true, session })
+
+    const reputationChange = -3 * Math.max(Math.ceil(tour.price * seatsToDelete.length / 1000), 0)
+
+    await Client.findOneAndUpdate({ _id: client._id }, {
+      reputation: client.reputation + reputationChange,
+      $push: {
+        reservations: reservation,
+        history: {
+          user: req.user,
+          action_type: 'Asientos confirmados liberados',
+          description: 'Cantidad de asientos liberados: ' + seatsToDelete.length + '. Reservación: ' + reservation._id + '. Cambio en reputación: ' + reputationChange.toString() + ' reputación.',
+          user_comments: comments
+        }
+      }
+    },
+    { new: true, session })
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json(updatedReservation)
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(400)
+    console.error(error)
+    throw new Error('No se pudo actualizar la reservación')
+  }
+}
+
+const reduceConfirmedSeats = asyncHandler(async (req, res) => {
+  const reservationId = req.params.id
+  const { comments, seats_to_delete: seatsToDelete } = req.body
+  if (!seatsToDelete) {
+    throw new Error('Debes ingresar todos los datos')
+  }
+
+  try {
+    const reservation = await Reservation.findOne({ _id: reservationId })
+    if (!reservation || !reservation.isActive) {
+      res.status(400)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    }
+
+    if (reservation.status.status_code !== 'Completed' && reservation.status.status_code !== 'Pending devolution') {
+      res.status(400)
+      throw new Error('La reservación no admite una disminución de la cantidad de asientos reservados')
+    }
+
+    if (seatsToDelete.some((seat) => !reservation.confirmed_seats.includes(seat))) {
+      res.status(400)
+      throw new Error('No se pueden eliminar estos asientos')
+    }
+
+    const seatsToDeleteAmount = seatsToDelete.length
+
+    const newSeatsAmount = reservation.reserved_seats_amount - seatsToDeleteAmount
+    if (newSeatsAmount <= 0) {
+      res.status(400)
+      throw new Error('No se puede disminuir esta cantidad de asientos. Considere cancelar la reservación')
+    }
+
+    const tour = await Tour.findOne({ _id: reservation.tour._id })
+
+    if (!tour || !tour.isActive) {
+      res.status(400)
+      throw new Error('El tour no se encuentra en la base de datos')
+    }
+
+    const client = await Client.findOne({ _id: reservation.client._id })
+
+    if (!client || !client.isActive) {
+      res.status(400)
+      throw new Error('El cliente no se encuentra en la base de datos')
+    }
+
+    await reduceConfirmedSeatsSession(req, res, comments, reservation, seatsToDelete, tour, client, newSeatsAmount)
+  } catch (error) {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      res.status(404)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    } else {
+      res.status(res.statusCode || 400)
+      throw new Error(error.message || 'No se pudo actualizar la reservación')
+    }
+  }
+})
+
+const cancelReservationByClientSession = async (req, res, reservation, tour, client) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    const newTourSeats = tour.confirmed_seats.filter(seat => !reservation.confirmed_seats.includes(seat))
+    await Tour.findOneAndUpdate({ _id: tour._id }, {
+      reserved_seats_amount: tour.reserved_seats_amount - reservation.reserved_seats_amount,
+      $set: {
+        confirmed_seats: newTourSeats
+      },
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Reservación cancelada por cliente',
+          description: 'Reservación: ' + reservation._id
+        }
+      }
+    }, {
+      new: true,
+      session
+    })
+
+    const updatedReservation = await Reservation.findOneAndUpdate({ _id: reservation._id }, {
+      status: {
+        status_code: 'Canceled by client',
+        description: 'Reservación cancelada por cliente. No hay devoluciones'
+      },
+      $push: {
+        history: {
+          user: req.user,
+          action_type: 'Reservación cancelada por cliente',
+          description: 'Reservación cancelada por cliente. No hay devoluciones'
+        }
+      }
+    }, { new: true, session })
+
+    let reputationChange = Math.max(Math.ceil(tour.price * reservation.reserved_seats_amount / 1000), 0)
+    if (reservation.status.status_code === 'Pending') {
+      reputationChange = -1 * reputationChange
+    } else if (reservation.status.status_code === 'Accepted') {
+      reputationChange = -2 * reputationChange
+    } else {
+      reputationChange = -3 * reputationChange
+    }
+
+    await Client.findOneAndUpdate({ _id: client._id }, {
+      reputation: client.reputation + reputationChange,
+      $push: {
+        reservations: reservation,
+        history: {
+          user: req.user,
+          action_type: 'Reservación cancelada por cliente',
+          description: 'Reservación: ' + reservation._id + '. ' + reputationChange.toString() + ' reputación.'
+        }
+      }
+    },
+    { new: true, session })
+
+    await session.commitTransaction()
+    session.endSession()
+    res.status(200).json(updatedReservation)
+  } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
+    res.status(400)
+    console.error(error)
+    throw new Error('No se pudo actualizar la reservación')
+  }
+}
+
+const cancelReservationByClient = asyncHandler(async (req, res) => {
+  const reservationId = req.params.id
+  const { devolutions } = req.body
+
+  let makeDevolutions = true
+  if (req.user.isAdmin) {
+    makeDevolutions = !devolutions || devolutions !== 'false'
+  }
+
+  try {
+    const reservation = await Reservation.findOne({ _id: reservationId })
+    if (!reservation || !reservation.isActive) {
+      res.status(400)
+      throw new Error('La reservación no se encuentra en la base de datos')
+    }
+
+    if (reservation.status.status_code === 'Canceled by client' || reservation.status.status_code === 'Tour canceled' || reservation.status.status_code === 'Canceled') {
+      res.status(400)
+      throw new Error('La reservación ya está cancelada')
+    }
+
+    if (makeDevolutions && reservation.pending_devolution > 0) {
+      res.status(400)
+      throw new Error('Realizar las devoluciones correspondientes antes de cancelar')
+    }
+
+    const tour = await Tour.findOne({ _id: reservation.tour._id })
+
+    if (!tour || !tour.isActive) {
+      res.status(400)
+      throw new Error('El tour no se encuentra en la base de datos')
+    }
+
+    const client = await Client.findOne({ _id: reservation.client._id })
+
+    if (!client || !client.isActive) {
+      res.status(400)
+      throw new Error('El cliente no se encuentra en la base de datos')
+    }
+
+    await cancelReservationByClientSession(req, res, reservation, tour, client)
   } catch (error) {
     if (error.name === 'CastError' && error.kind === 'ObjectId') {
       res.status(404)
@@ -840,5 +1149,7 @@ module.exports = {
   chooseSeats,
   makeDevolution,
   changeConfirmedSeats,
-  reduceReservedSeatsAmount
+  reduceReservedSeatsAmount,
+  reduceConfirmedSeats,
+  cancelReservationByClient
 }
