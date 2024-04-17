@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler')
 
 const TourTemplate = require('@/models/tourTemplatesModel')
+const Tour = require('@/models/toursModel')
 
 const createTemplate = asyncHandler(async (req, res) => {
   const tourTemplateData = req.body
@@ -67,6 +68,36 @@ const getAllTemplates = asyncHandler(async (req, res) => {
   } else {
     res.status(400)
     throw new Error('No se puede mostrar la información en este momento')
+  }
+})
+
+const getAllTours = asyncHandler(async (req, res) => {
+  const templateId = req.params.id
+
+  try {
+    const template = await TourTemplate.findOne({ _id: templateId })
+
+    if (!template || !template.isActive) {
+      res.status(400)
+      throw new Error('La plantilla no se encuentra en la base de datos')
+    }
+
+    const tours = await Tour.find({ tourTemplate: templateId })
+
+    if (tours) {
+      res.status(200).json(tours)
+    } else {
+      res.status(400)
+      throw new Error('No se pudieron obtener todos los tours')
+    }
+  } catch (error) {
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      res.status(404)
+      throw new Error('La plantilla no se encuentra en la base de datos')
+    } else {
+      res.status(res.statusCode || 400)
+      throw new Error(error.message || 'No se pudieron obtener todos los tours')
+    }
   }
 })
 
@@ -165,6 +196,7 @@ module.exports = {
   createTemplate,
   getTemplate,
   getAllTemplates,
+  getAllTours,
   updateTemplate,
   deleteTemplate
 }
