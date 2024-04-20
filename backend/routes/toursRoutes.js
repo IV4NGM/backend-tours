@@ -1,9 +1,10 @@
 const { Router } = require('express')
 const router = Router()
-const { createTour, getTour, getAllTours, getAllReservations, updateTour, addPromos, editPromo, deletePromo, cancelTour, setTourCompleted, deleteTour } = require('@/controllers/toursControllers/toursControllers')
+const { createTour, getTour, getAllTours, getAllReservations, updateTour, addPromos, editPromo, deletePromo, cancelTour, setTourCompleted, deleteTour, getToursFormatted } = require('@/controllers/toursControllers/toursControllers')
 const { protect, adminProtect } = require('@/middleware/authMiddleware')
 
 router.post('/', protect, createTour)
+router.get('/all', getToursFormatted)
 router.get('/:id', getTour)
 router.get('/', getAllTours)
 router.get('/reservations/:id', protect, getAllReservations)

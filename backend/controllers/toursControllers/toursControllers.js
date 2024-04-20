@@ -5,6 +5,7 @@ const editPromo = require('./promosControllers/editPromo')
 const deletePromo = require('./promosControllers/deletePromo')
 const cancelTour = require('./toursReservationsControllers/cancelTour')
 const setTourCompleted = require('./toursReservationsControllers/setTourCompleted')
+const getToursFormatted = require('./toursAndTemplatesControllers/getToursFormatted')
 
 module.exports = {
   createTour,
@@ -17,5 +18,6 @@ module.exports = {
   deletePromo,
   cancelTour,
   setTourCompleted,
-  deleteTour
+  deleteTour,
+  getToursFormatted
 }
