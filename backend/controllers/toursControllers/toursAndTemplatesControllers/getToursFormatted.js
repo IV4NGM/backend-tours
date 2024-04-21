@@ -23,6 +23,7 @@ const getToursFormatted = asyncHandler(async (req, res) => {
 
   if (!deleted || deleted !== 'true') {
     matchingConditions.isActive = true
+    idMatch.isActive = true
   }
 
   if (templateId) {
@@ -32,6 +33,11 @@ const getToursFormatted = asyncHandler(async (req, res) => {
   const tours = await TourTemplate.aggregate([
     {
       $match: idMatch
+    },
+    {
+      $sort: {
+        duration: 1
+      }
     },
     {
       $lookup: {
@@ -51,6 +57,7 @@ const getToursFormatted = asyncHandler(async (req, res) => {
               price: 1,
               min_payment: 1,
               promos: 1,
+              status: 1,
               isActive: 1
             }
           }

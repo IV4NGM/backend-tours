@@ -4,7 +4,7 @@ const { createTour, getTour, getAllTours, getAllReservations, updateTour, addPro
 const { protect, adminProtect } = require('@/middleware/authMiddleware')
 
 router.post('/', protect, createTour)
-router.get('/all', getToursFormatted)
+router.post('/all', getToursFormatted)
 router.get('/:id', getTour)
 router.get('/', getAllTours)
 router.get('/reservations/:id', protect, getAllReservations)
