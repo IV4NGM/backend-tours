@@ -125,7 +125,7 @@ const updateTemplate = asyncHandler(async (req, res) => {
     const { comments, ...tourTemplateDataToUpdate } = templateData
 
     const updatedTemplate = await TourTemplate.findOneAndUpdate({ _id: templateId }, {
-      tourTemplateDataToUpdate,
+      ...tourTemplateDataToUpdate,
       duration,
       $push: {
         history: {

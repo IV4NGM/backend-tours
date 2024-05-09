@@ -4,8 +4,8 @@ const { createTemplate, getTemplate, getAllTemplates, getAllTours, updateTemplat
 const { protect, adminProtect } = require('@/middleware/authMiddleware')
 
 router.post('/', protect, adminProtect, createTemplate)
+router.get('/all', getAllTemplates)
 router.get('/:id', getTemplate)
-router.get('/', getAllTemplates)
 router.get('/tours/:id', getAllTours)
 router.put('/:id', protect, adminProtect, updateTemplate)
 router.delete('/:id', protect, adminProtect, deleteTemplate)
