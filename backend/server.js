@@ -2,8 +2,8 @@ const express = require('express')
 require('colors')
 require('dotenv').config()
 const cors = require('cors')
-const ip = require('ip')
-const ipAddress = ip.address()
+// const ip = require('ip')
+// const ipAddress = ip.address()
 // Configurar alias
 const path = require('path')
 require('module-alias/register')
@@ -47,5 +47,5 @@ app.use(errorHandler)
 // Iniciar servidor
 app.listen(port, () => {
   console.log(`Servidor iniciado en el puerto ${port}`)
-  console.log(`Disponible en la red con ${ipAddress}:${port}`)
+  // console.log(`Disponible en la red con ${ipAddress}:${port}`)
 })
